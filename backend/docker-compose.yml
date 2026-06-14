@@ -1,0 +1,84 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-arxiv_rag}
+      POSTGRES_USER: ${PGUSER:-arxiv}
+      POSTGRES_PASSWORD: ${PGPASSWORD:-arxiv}
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PGUSER:-arxiv} -d ${PGDATABASE:-arxiv_rag}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGDATABASE=${PGDATABASE:-arxiv_rag}
+      - PGUSER=${PGUSER:-arxiv}
+      - PGPASSWORD=${PGPASSWORD:-arxiv}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-arxiv-research}
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_BUCKET_NAME=${SUPABASE_BUCKET_NAME:-research-docs}
+      - SENTRY_DSN=${SENTRY_DSN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  worker:
+    build: .
+    command: python src/worker.py
+    environment:
+      - PGHOST=postgres
+      - PGPORT=5432
+      - PGDATABASE=${PGDATABASE:-arxiv_rag}
+      - PGUSER=${PGUSER:-arxiv}
+      - PGPASSWORD=${PGPASSWORD:-arxiv}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - EMBEDDING_PROVIDER=${EMBEDDING_PROVIDER:-openai}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-text-embedding-3-small}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_INDEX_NAME=${PINECONE_INDEX_NAME:-arxiv-research}
+      - COHERE_API_KEY=${COHERE_API_KEY}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+      - SUPABASE_BUCKET_NAME=${SUPABASE_BUCKET_NAME:-research-docs}
+      - SENTRY_DSN=${SENTRY_DSN}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pgdata:

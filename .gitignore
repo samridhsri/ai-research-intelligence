@@ -1,0 +1,36 @@
+# Environment variables
+.env
+backend/.env
+frontend/.env
+*.env.local
+
+# Python
+venv/
+backend/venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+
+# Node / Next.js
+node_modules/
+frontend/node_modules/
+.next/
+frontend/.next/
+out/
+.vercel
+.turbo
+
+# OS
+.DS_Store
+
+# Temporary backups
+temp_backup/
+
+# Runtime data and uploads
+backend/data/
+
+
