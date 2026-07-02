@@ -15,6 +15,124 @@ A modular, production-grade hybrid search RAG (Retrieval-Augmented Generation) p
 
 ---
 
+## Architecture
+
+![Architecture Diagram](architecureDiagramAIResearchIntelligence.png)
+
+### Component Architecture (Mermaid)
+```mermaid
+graph TD
+    %% Styling
+    classDef client fill:#dcf8c6,stroke:#333,stroke-width:2px;
+    classDef app fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef worker fill:#ede7f6,stroke:#5e35b1,stroke-width:2px;
+    classDef db fill:#fff9c4,stroke:#fbc02d,stroke-width:2px;
+    classDef external fill:#ffe0b2,stroke:#f57c00,stroke-width:2px;
+
+    %% Nodes
+    NextJS["Next.js Frontend"]:::client
+    FastAPI["FastAPI Backend (API)"]:::app
+    Redis["Redis Queue (RQ)"]:::app
+    Worker["RQ Background Worker"]:::worker
+    
+    Postgres[("PostgreSQL\n(pgvector + FTS)")]:::db
+    Supabase[("Supabase Storage\n(or Local Storage)")]:::db
+    Pinecone[("Pinecone Index\n(Vector DB Option)")]:::db
+    
+    OpenAIEmbed["OpenAI Embedding API\n(text-embedding-3-small)"]:::external
+    OpenAILLM["OpenAI Chat API\n(gpt-4o-mini)"]:::external
+    CohereRerank["Cohere Rerank API\n(rerank-english-v3.0)"]:::external
+    LocalTransformers["Local Embeddings\n(SentenceTransformers)"]:::external
+
+    %% Relations
+    NextJS -- HTTP REST --> FastAPI
+    FastAPI -- Enqueue Job --> Redis
+    Redis -- Polls Jobs --> Worker
+    
+    %% API Interactions
+    FastAPI -- Reads Meta / Chat History --> Postgres
+    FastAPI -- LangGraph RAG --> OpenAILLM
+    FastAPI -- Hybrid Search --> Postgres
+    FastAPI -- Hybrid Search --> Pinecone
+    FastAPI -- Reranks Chunks --> CohereRerank
+    
+    %% Worker Ingestion Interactions
+    Worker -- Uploads/Downloads raw PDFs --> Supabase
+    Worker -- Extract & Chunk PDFs --> Worker
+    Worker -- Generate Embeddings --> OpenAIEmbed
+    Worker -- Generate Embeddings (Fallback) --> LocalTransformers
+    Worker -- Index Vectors & Text --> Postgres
+    Worker -- Index Vectors (Optional) --> Pinecone
+```
+
+### Document Ingestion Sequence
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Front as Next.js Frontend
+    participant API as FastAPI Backend
+    participant Redis as Redis Queue
+    participant Worker as Background Worker
+    participant DB as PostgreSQL
+    participant Storage as Storage Service
+    participant Embed as Embedding API
+
+    User->>Front: Upload PDF Document
+    Front->>API: POST /workspaces/{id}/documents (with file)
+    API->>Storage: upload_file(filename, bytes)
+    Storage-->>API: return storage_path
+    API->>DB: INSERT INTO documents (status='processing')
+    DB-->>API: return document_id
+    API->>Redis: enqueue_job(process_document_task, document_id)
+    API-->>Front: Return 200 OK (status='processing')
+    
+    Note over Worker, Redis: Worker processes job asynchronously
+    Worker->>Redis: Fetch job (process_document_task)
+    Worker->>DB: UPDATE documents SET status='processing'
+    Worker->>Storage: download_file(storage_path)
+    Storage-->>Worker: return file_bytes
+    Worker->>Worker: Parse PDF (PyMuPDF) & Chunk (RecursiveCharacterTextSplitter)
+    Worker->>Embed: get_embeddings(chunk_texts)
+    Embed-->>Worker: return list of vector embeddings
+    Worker->>DB: INSERT INTO chunks (document_id, chunk_text, page_number, embedding)
+    Worker->>DB: UPDATE documents SET status='ready'
+```
+
+### LangGraph RAG State Flow
+```mermaid
+stateDiagram-v2
+    [*] --> IntentClassifier : User Query Received
+    
+    state IntentClassifier {
+        [*] --> ClassifyIntent
+    }
+    
+    IntentClassifier --> HybridSearchRetriever : True (Needs Context)
+    IntentClassifier --> ResponseSynthesizer : False (General Query)
+
+    state HybridSearchRetriever {
+        [*] --> ParallelSearch
+        ParallelSearch --> DenseVectorSearch
+        ParallelSearch --> SparseFTSearch
+        DenseVectorSearch --> RRF_Fusion
+        SparseFTSearch --> RRF_Fusion
+        RRF_Fusion --> CohereReranker
+        CohereReranker --> DiversificationFilter
+    }
+    
+    HybridSearchRetriever --> ResponseSynthesizer : Context Chunks Loaded
+    
+    state ResponseSynthesizer {
+        [*] --> SynthesisPrompt
+        SynthesisPrompt --> SynthesizeResponse
+    }
+
+    ResponseSynthesizer --> [*] : Return Answer & Citations
+```
+
+---
+
 ## Project Structure
 
 The codebase is divided into two primary workspaces:
