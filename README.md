@@ -102,14 +102,14 @@ sequenceDiagram
 ### LangGraph RAG State Flow
 ```mermaid
 stateDiagram-v2
-    [*] --> IntentClassifier : User Query Received
+    [*] --> IntentClassifier : "User Query Received"
     
     state IntentClassifier {
         [*] --> ClassifyIntent
     }
     
-    IntentClassifier --> HybridSearchRetriever : True (Needs Context)
-    IntentClassifier --> ResponseSynthesizer : False (General Query)
+    IntentClassifier --> HybridSearchRetriever : "True (Needs Context)"
+    IntentClassifier --> ResponseSynthesizer : "False (General Query)"
 
     state HybridSearchRetriever {
         [*] --> ParallelSearch
@@ -121,14 +121,14 @@ stateDiagram-v2
         CohereReranker --> DiversificationFilter
     }
     
-    HybridSearchRetriever --> ResponseSynthesizer : Context Chunks Loaded
+    HybridSearchRetriever --> ResponseSynthesizer : "Context Chunks Loaded"
     
     state ResponseSynthesizer {
         [*] --> SynthesisPrompt
         SynthesisPrompt --> SynthesizeResponse
     }
 
-    ResponseSynthesizer --> [*] : Return Answer & Citations
+    ResponseSynthesizer --> [*] : "Return Answer and Citations"
 ```
 
 ---
@@ -189,7 +189,7 @@ In a separate terminal, start the background ingestion worker:
 ```bash
 cd backend
 source venv/bin/activate
-python src/worker.py
+python -m src.worker
 ```
 
 #### Frontend
